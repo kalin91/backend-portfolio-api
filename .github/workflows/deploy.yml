@@ -113,7 +113,7 @@ jobs:
             --cpu=1
             --port=8080
             --allow-unauthenticated
-            --set-env-vars=SPRING_PROFILES_ACTIVE=prod
           # Si necesitas pasar el JSON de credenciales:
           env_vars: |
+            SPRING_PROFILES_ACTIVE=prod
             API_CREDENTIALS_JSON=${{ secrets.API_CRED }}
