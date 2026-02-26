@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.Base64;
 import java.util.Map;
 
 /**
@@ -23,9 +24,9 @@ import java.util.Map;
  *
  * <pre>{@code
  * {
- *   "admin":  { "user": "api_admin",  "pass": "...", "permissions": 7 },
- *   "writer": { "user": "api_writer", "pass": "...", "permissions": 6 },
- *   "reader": { "user": "api_reader", "pass": "...", "permissions": 4 }
+ * "admin": { "user": "api_admin", "pass": "...", "permissions": 7 },
+ * "writer": { "user": "api_writer", "pass": "...", "permissions": 6 },
+ * "reader": { "user": "api_reader", "pass": "...", "permissions": 4 }
  * }
  * }</pre>
  *
@@ -58,6 +59,8 @@ public class SecurityProperties {
      * @param credentialsJson the JSON string to bind
      */
     public void setCredentialsJson(String credentialsJson) {
+        byte[] decodedBytes = Base64.getDecoder().decode(credentialsJson);
+        credentialsJson = new String(decodedBytes);
         this.credentialsJson = credentialsJson;
     }
 
@@ -74,9 +77,9 @@ public class SecurityProperties {
         try {
             return objectMapper.readValue(credentialsJson, new TypeReference<>() {});
         } catch (Exception e) {
-            log.error("Parsing credentials JSON failed - ensure API_CREDENTIALS_JSON is valid JSON {}", credentialsJson, e);  
+            log.error("Parsing credentials JSON failed - ensure API_CREDENTIALS_JSON is valid JSON {}", credentialsJson, e);
             throw new IllegalStateException("Failed to parse security.credentials-json – " +
-                    "ensure API_CREDENTIALS_JSON is valid JSON", e);
+                "ensure API_CREDENTIALS_JSON is valid JSON", e);
         }
     }
 }
