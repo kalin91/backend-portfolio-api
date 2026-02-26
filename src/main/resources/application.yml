@@ -45,6 +45,9 @@ spring:
       on-profile: cds
   main:
     web-application-type: none
+
+security:
+  credentials-json: e30=
 ---
 spring:
   config:
