@@ -108,6 +108,13 @@ public class SecurityConfig {
             })
             .toList();
 
+        if (users.isEmpty()) {
+            return new MapReactiveUserDetailsService(User.withUsername("cds_user")
+                    .password(encoder.encode("cds_pass"))
+                    .roles("NONE")
+                    .build());
+        }
+
         return new MapReactiveUserDetailsService(users);
     }
 
