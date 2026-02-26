@@ -113,6 +113,7 @@ jobs:
             --cpu=1
             --port=8080
             --allow-unauthenticated
+            --service-account=github-deployer@playconsoleproject-474710.iam.gserviceaccount.com
           # Si necesitas pasar el JSON de credenciales:
           env_vars: |
             SPRING_PROFILES_ACTIVE=prod
