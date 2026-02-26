@@ -64,7 +64,13 @@ public class SecurityConfig {
             .csrf(ServerHttpSecurity.CsrfSpec::disable)
             // Allow embedding in iframes (e.g. for creating a custom GraphiQL wrapper or demo page)
             .headers(headers -> headers.frameOptions(ServerHttpSecurity.HeaderSpec.FrameOptionsSpec::disable))
-            .httpBasic(Customizer.withDefaults())
+            .httpBasic(httpBasic -> httpBasic
+                // INFO: Suppress the WWW-Authenticate header to prevent the browser's native login popup.
+                // Clients (like our GraphiQL demo wrapper) must send credentials proactively.
+                .authenticationEntryPoint((exchange, ex) -> {
+                    exchange.getResponse().setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
+                    return exchange.getResponse().setComplete();
+                }))
             .authorizeExchange(exchanges -> exchanges
                 .pathMatchers("/actuator/health", "/actuator/info").permitAll()
                 .pathMatchers("/graphiql/**").permitAll()
