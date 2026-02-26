@@ -62,6 +62,8 @@ public class SecurityConfig {
             // uses HTTP Basic Auth (no session cookies are issued), so CSRF attacks
             // cannot be mounted against it.
             .csrf(ServerHttpSecurity.CsrfSpec::disable)
+            // Allow embedding in iframes (e.g. for creating a custom GraphiQL wrapper or demo page)
+            .headers(headers -> headers.frameOptions(ServerHttpSecurity.HeaderSpec.FrameOptionsSpec::disable))
             .httpBasic(Customizer.withDefaults())
             .authorizeExchange(exchanges -> exchanges
                 .pathMatchers("/actuator/health", "/actuator/info").permitAll()

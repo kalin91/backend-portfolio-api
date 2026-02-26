@@ -68,7 +68,9 @@ Use `Permission.ROLE_ADMIN`, `Permission.ROLE_WRITER`, `Permission.ROLE_READER` 
 
 ### Credential Configuration
 
-Credentials are loaded from the `API_CREDENTIALS_JSON` environment variable. The JSON shape is:
+Credentials are loaded from the `API_CREDENTIALS_JSON` environment variable. The value must be a **Base64-encoded** string of the JSON configuration.
+
+**JSON Shape (before encoding):**
 
 ```json
 {
@@ -78,9 +80,9 @@ Credentials are loaded from the `API_CREDENTIALS_JSON` environment variable. The
 }
 ```
 
-A local-dev fallback is defined in `application.yml` via `${API_CREDENTIALS_JSON:...}`. NEVER commit production passwords. In production, supply `API_CREDENTIALS_JSON` as an environment secret.
+A local-dev fallback is defined in `application.yml` via `${API_CREDENTIALS_JSON:...}`. NEVER commit production passwords. In production, supply `API_CREDENTIALS_JSON` as an environment secret (Base64 encoded).
 
-### Adding New GraphQL Operations
+### Addinng New GraphQL Operations
 
 - **Queries** must have `@PreAuthorize(Permission.ROLE_READER)`.
 - **Create/Update mutations** must have `@PreAuthorize(Permission.ROLE_WRITER)`.

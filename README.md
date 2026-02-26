@@ -60,8 +60,9 @@ Public paths (no authentication required):
 
 ### Credential Configuration
 
-Credentials are loaded from the `API_CREDENTIALS_JSON` environment variable at startup. The variable must be a JSON object with three keys (`admin`, `writer`, `reader`), each carrying a `user`/`pass`/`permissions` triple:
+Credentials are loaded from the `API_CREDENTIALS_JSON` environment variable at startup. The variable must be a **Base64-encoded** string of a JSON object with three keys (`admin`, `writer`, `reader`), each carrying a `user`/`pass`/`permissions` triple:
 
+**Raw JSON (before encoding):**
 ```json
 {
   "admin":  { "user": "api_admin",  "pass": "<strong-secret>", "permissions": 7 },
@@ -76,10 +77,20 @@ If `API_CREDENTIALS_JSON` is not set, the application falls back to local-dev de
 
 #### Example: starting with custom credentials
 
+1. Create the JSON string.
+2. Encode it to Base64 (e.g., `echo -n '{"admin":...}' | base64`).
+3. Set the environment variable.
+
 ```bash
-export API_CREDENTIALS_JSON='{"admin":{"user":"api_admin","pass":"s3cr3t!","permissions":7},"writer":{"user":"api_writer","pass":"wr1t3!","permissions":6},"reader":{"user":"api_reader","pass":"r3@d!","permissions":4}}'
+# Example (Base64 for default local credentials)
+export API_CREDENTIALS_JSON='eyJhbWluIjp7InVzZXIiOiJhcGlfYWRtaW4iLCJwYXNzIjoiYWRtaW4xMjMiLCJwZXJ...'
 ./gradlew bootRun
 ```
+
+### Security Headers
+
+- **CSRF**: Disabled (stateless API).
+- **X-Frame-Options**: Disabled to allow embedding the GraphiQL interface in iframes (e.g., for portfolio demos).
 
 #### Example: calling the API with Basic Auth
 
