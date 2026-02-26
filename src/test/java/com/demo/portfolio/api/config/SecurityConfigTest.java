@@ -120,7 +120,9 @@ class SecurityConfigTest {
 
     private SecurityProperties buildProperties() {
         SecurityProperties props = new SecurityProperties();
-        props.setCredentialsJson(CREDENTIALS_JSON);
+        // Since SecurityProperties now expects a Base64-encoded string, we must encode our test JSON.
+        String encoded = java.util.Base64.getEncoder().encodeToString(CREDENTIALS_JSON.getBytes());
+        props.setCredentialsJson(encoded);
         return props;
     }
 

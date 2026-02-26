@@ -35,9 +35,8 @@ management:
 security:
   # Credentials JSON. In production supply the full JSON via API_CREDENTIALS_JSON env var.
   # Permissions bitmask: ADMIN=1, WRITER=2, READER=4 (values are additive bitmasks).
-  # WARNING: The defaults below are for local-dev only. NEVER use in production.
-  credentials-json: >-
-    ${API_CREDENTIALS_JSON:{"admin":{"user":"api_admin","pass":"admin123","permissions":7},"writer":{"user":"api_writer","pass":"writer123","permissions":6},"reader":{"user":"api_reader","pass":"reader123","permissions":4}}}
+  # WARNING: Must provide values as defaults are not available in any profile.
+  credentials-json: ${API_CREDENTIALS_JSON:}
 
 ---
 spring:
