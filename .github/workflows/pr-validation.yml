@@ -29,3 +29,21 @@ jobs:
 
       - name: Build with Gradle
         run: ./gradlew clean build
+
+      - name: Upload Merged Test Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: merged-test-report
+          path: build/reports/tests/merged/
+          retention-days: 7
+
+      - name: Upload Karate Reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: karate-reports
+          path: build/karate-reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
