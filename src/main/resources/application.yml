@@ -23,6 +23,9 @@ dgs:
   graphql:
     path: /model
 
+server:
+  forward-headers-strategy: framework
+
 management:
   endpoints:
     web:
