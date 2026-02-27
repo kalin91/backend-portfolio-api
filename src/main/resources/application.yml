@@ -23,6 +23,9 @@ dgs:
   graphql:
     path: /model
 
+server:
+  forward-headers-strategy: framework
+
 management:
   endpoints:
     web:
@@ -35,9 +38,12 @@ management:
 security:
   # Credentials JSON. In production supply the full JSON via API_CREDENTIALS_JSON env var.
   # Permissions bitmask: ADMIN=1, WRITER=2, READER=4 (values are additive bitmasks).
-  # WARNING: The defaults below are for local-dev only. NEVER use in production.
-  credentials-json: >-
-    ${API_CREDENTIALS_JSON:{"admin":{"user":"api_admin","pass":"admin123","permissions":7},"writer":{"user":"api_writer","pass":"writer123","permissions":6},"reader":{"user":"api_reader","pass":"reader123","permissions":4}}}
+  # WARNING: Must provide values as defaults are not available in any profile.
+  credentials-json: ${API_CREDENTIALS_JSON:}
+  cors:
+    # Comma-separated list of allowed origins for CORS (e.g. portfolio demo site).
+    # Override via CORS_ALLOWED_ORIGINS env var in production.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
 
 ---
 spring:
@@ -46,6 +52,9 @@ spring:
       on-profile: cds
   main:
     web-application-type: none
+
+security:
+  credentials-json: e30=
 ---
 spring:
   config:

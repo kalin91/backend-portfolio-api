@@ -3,11 +3,18 @@ package com.demo.portfolio.api.config;
 import com.demo.portfolio.api.dto.CredentialDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
+import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.security.core.userdetails.MapReactiveUserDetailsService;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -20,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * the expected role assignments, and that passwords are BCrypt-encoded and never stored as
  * plain text.
  */
+@SuppressWarnings("null")
 class SecurityConfigTest {
 
     private static final String CREDENTIALS_JSON =
@@ -116,11 +124,52 @@ class SecurityConfigTest {
         assertTrue(encoder.matches("admin123", admin.getPassword()));
     }
 
+    /**
+     * Verifies that the CORS configuration source exposes the configured allowed origins,
+     * methods, and headers, and that credentials are permitted.
+     */
+    @Test
+    void corsConfigurationSourceUsesAllowedOrigins() {
+        List<String> origins = Arrays.asList("https://example.com", "https://demo.site");
+        CorsConfigurationSource source = securityConfig.corsConfigurationSource(origins);
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/model").build());
+        CorsConfiguration config = source.getCorsConfiguration(exchange);
+
+        assertNotNull(config);
+        assertEquals(origins, config.getAllowedOrigins());
+        assertTrue(config.getAllowedMethods().contains("POST"));
+        assertTrue(config.getAllowedMethods().contains("OPTIONS"));
+        assertTrue(config.getAllowedHeaders().contains("Authorization"));
+        assertTrue(config.getAllowedHeaders().contains("Content-Type"));
+        assertTrue(config.getAllowCredentials());
+        assertEquals(3600L, config.getMaxAge());
+    }
+
+    /**
+     * Verifies that when no origins are configured (empty list), the CORS source still
+     * returns a valid configuration with an empty origin list.
+     */
+    @Test
+    void corsConfigurationSourceWithEmptyOrigins() {
+        CorsConfigurationSource source = securityConfig.corsConfigurationSource(Collections.emptyList());
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/model").build());
+        CorsConfiguration config = source.getCorsConfiguration(exchange);
+
+        assertNotNull(config);
+        assertTrue(config.getAllowedOrigins().isEmpty());
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private SecurityProperties buildProperties() {
         SecurityProperties props = new SecurityProperties();
-        props.setCredentialsJson(CREDENTIALS_JSON);
+        // Since SecurityProperties now expects a Base64-encoded string, we must encode our test JSON.
+        String encoded = java.util.Base64.getEncoder().encodeToString(CREDENTIALS_JSON.getBytes());
+        props.setCredentialsJson(encoded);
         return props;
     }
 

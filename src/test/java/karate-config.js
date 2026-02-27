@@ -19,12 +19,25 @@ function fn() {
   }
 
   // HTTP Basic Auth helpers – builds a 'Basic <base64>' header for the given role profile.
-  // Reads credentials from API_CREDENTIALS_JSON env var; falls back to safe local-dev defaults.
-  const DEFAULT_CREDS = '{"admin":{"user":"api_admin","pass":"admin123","permissions":7},' +
-      '"writer":{"user":"api_writer","pass":"writer123","permissions":6},' +
-      '"reader":{"user":"api_reader","pass":"reader123","permissions":4}}';
+  // Reads credentials from API_CREDENTIALS_JSON env var (MUST be Base64 encoded).
+  
+  const rawCredsBase64 = java.lang.System.getenv('API_CREDENTIALS_JSON');
+  
+  if (!rawCredsBase64) {
+      karate.log('Error: API_CREDENTIALS_JSON environment variable is missing.');
+      throw new Error('API_CREDENTIALS_JSON environment variable is required and must be Base64 encoded.');
+  }
 
-  const credsJson = java.lang.System.getenv('API_CREDENTIALS_JSON') || DEFAULT_CREDS;
+  let credsJson;
+  try {
+      const decoder = java.util.Base64.getDecoder();
+      const decodedBytes = decoder.decode(rawCredsBase64);
+      credsJson = new java.lang.String(decodedBytes);
+  } catch (e) {
+      karate.log('Error: Failed to decode API_CREDENTIALS_JSON as Base64', e);
+      throw e;
+  }
+
   const creds = JSON.parse(credsJson);
 
   function authHeader(role) {

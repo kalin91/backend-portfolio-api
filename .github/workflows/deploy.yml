@@ -33,6 +33,23 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew clean build
 
+      - name: Upload Merged Test Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: merged-test-report
+          path: build/reports/tests/merged/
+          retention-days: 7
+
+      - name: Upload Karate Reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: karate-reports
+          path: build/karate-reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -118,3 +135,4 @@ jobs:
           env_vars: |
             SPRING_PROFILES_ACTIVE=prod
             API_CREDENTIALS_JSON=${{ secrets.API_CRED }}
+            CORS_ALLOWED_ORIGINS=https://www.azltechnologies.com,https://azltechnologies.com
