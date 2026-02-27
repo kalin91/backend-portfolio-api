@@ -11,6 +11,10 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
+      checks: 'write'       # Required for test reports
+      actions: 'read'       # Allows reading actions
+      issues: 'read'        # Sometimes setup-gradle reads issues
+      pull-requests: 'write' # Needed to comment on PRs if necessary
     env:
       API_CREDENTIALS_JSON: ${{ secrets.API_CRED }}
     steps:
