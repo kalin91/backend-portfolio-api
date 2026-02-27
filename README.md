@@ -57,6 +57,7 @@ Public paths (no authentication required):
 
 - `GET /actuator/health` and `GET /actuator/info` — liveness/readiness probes
 - `GET /graphiql/**` — in-browser GraphQL IDE (development convenience)
+- `GET /proxy/graphiql?role=<role>` — server-side proxy that injects credentials into the GraphiQL HTML; no username/password appears in any browser-visible URL
 
 ### Credential Configuration
 
@@ -199,7 +200,7 @@ GraphiQL (UI for testing queries) is available at `http://localhost:8080/graphiq
 
 On startup, when the database is empty, sample data is seeded from JSON resources (`src/main/resources/data/customers.json` and `src/main/resources/data/orders.json`) by `DataSeeder`.
 
-> **Note:** When running locally without setting `API_CREDENTIALS_JSON`, the application uses the built-in development defaults (`api_admin` / `admin123`, `api_writer` / `writer123`, `api_reader` / `reader123`). GraphiQL requires these credentials too — use the **HTTP Headers** pane to set `Authorization: Basic YXBpX2FkbWluOmFkbWluMTIz` (base64 of `api_admin:admin123`).
+> **Note:** When running locally without setting `API_CREDENTIALS_JSON`, the application uses the built-in development defaults (`api_admin` / `admin123`, `api_writer` / `writer123`, `api_reader` / `reader123`). GraphiQL requires these credentials too — use the **HTTP Headers** pane to set `Authorization: Basic YXBpX2FkbWluOmFkbWluMTIz` (base64 of `api_admin:admin123`), or open the **proxy endpoint** at `http://localhost:8080/proxy/graphiql?role=admin` which injects the credentials automatically.
 
 ### Running Tests
 
@@ -214,12 +215,32 @@ The project employs a comprehensive testing strategy combining unit and integrat
 
 #### **2. Integration Testing (Karate)**
 
-- **Scope**: End-to-end API testing — GraphQL queries, mutations, H2 database, schema validation, and access-control enforcement.
-- **Features**: Parallel execution, full request/response logging, schema-first validation.
+- **Scope**: End-to-end API testing — GraphQL queries, mutations, H2 database, schema validation, access-control enforcement, and the GraphiQL proxy round-trip.
+- **Features**: Parallel execution (`degree=5`), full request/response logging, schema-first validation.
 - **Auth**: Each scenario sends an explicit `Authorization: Basic …` header via the `authHeader('role')` helper defined in `karate-config.js`.
 - **Command**: `./gradlew karateTest`
 
 > **Integration tests with custom credentials**: If you set `API_CREDENTIALS_JSON` for the app, export the same variable before running Karate so `karate-config.js` picks it up and generates the correct headers.
+
+##### Key Files
+
+| File | Purpose |
+|---|---|
+| `src/test/java/com/demo/portfolio/api/ITKarateRunner.java` | JUnit 5 runner that boots the Spring context on a random port and delegates to `Runner.path("classpath:")` for auto-discovery of all `*.feature` files. Passes the actual port via the `demo.server.port` system property. |
+| `src/test/java/karate-config.js` | Global config loaded once before every feature. Resolves `baseUrl` from `demo.server.port`, Base64-decodes `API_CREDENTIALS_JSON`, and exposes `authHeader(role)` and `basePath=/model` to all scenarios. |
+| `src/test/java/.../fetcher/customerDataFetcher.feature` | Customer CRUD (get, list, create, update, delete) + 2 access-control scenarios (reader blocked from create, writer blocked from delete). |
+| `src/test/java/.../fetcher/orderDataFetcher.feature` | Order CRUD (get, filter by status & customer, create, update, delete) + 2 access-control scenarios. |
+| `src/test/java/.../controller/graphiqlProxyController.feature` | End-to-end proxy tests: GET proxy → extract injected `Authorization` from HTML → POST GraphQL. 4 success scenarios + 2 forbidden scenarios + unknown-role → 400. |
+| `src/test/java/.../fetcher/*.graphql` | Named GraphQL operation strings loaded by feature files via `read()`. |
+
+##### GraphiQL Proxy Feature
+
+The proxy feature file exercises the full browser-free flow:
+1. `GET /proxy/graphiql?role=<role>` — fetches the (public) GraphiQL HTML server-side and injects a `window.fetch` patch that embeds the `Authorization` header.
+2. A JavaScript helper extracts the injected header from the HTML.
+3. A `POST /model` GraphQL request is made with the extracted header.
+
+This confirms both that the proxy renders correctly **and** that the credentials it injects are accepted (or denied) by the GraphQL layer according to the role's permissions.
 
 #### **3. Full Suite & Reporting**
 

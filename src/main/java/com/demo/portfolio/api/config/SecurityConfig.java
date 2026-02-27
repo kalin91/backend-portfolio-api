@@ -84,6 +84,10 @@ public class SecurityConfig {
             .authorizeExchange(exchanges -> exchanges
                 .pathMatchers("/actuator/health", "/actuator/info").permitAll()
                 .pathMatchers("/graphiql/**").permitAll()
+                // Public proxy endpoint: credentials are looked up server-side and
+                // injected as a script into the GraphiQL HTML; the browser never
+                // sees user:pass in any URL.
+                .pathMatchers("/proxy/graphiql").permitAll()
                 .anyExchange().authenticated())
             .build();
     }

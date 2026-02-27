@@ -44,6 +44,7 @@ Every GraphQL operation requires **HTTP Basic Auth** (`@EnableWebFluxSecurity`).
 
 - `/actuator/health`, `/actuator/info` — liveness/readiness probes
 - `/graphiql/**` — in-browser GraphQL IDE
+- `/proxy/graphiql` — server-side proxy that injects credentials into the GraphiQL HTML (see `GraphiQLProxyController`).
 
 ### Authorization (Method-Level)
 
@@ -133,11 +134,12 @@ A local-dev fallback is defined in `application.yml` via `${API_CREDENTIALS_JSON
 - **Coverage**: Every public method of every new or modified class must have at least one test. Edge cases (nulls, empty collections, boundary values) must also be covered.
 - **Command**: `./gradlew test`
 - **Execution Detail**: In current Gradle configuration, `test` depends on `karateTest`; running `./gradlew test` executes Karate first and then unit tests.
+-  **Prioritize mocking over creating test-only methods**: At design time, prefer mocking collaborators rather than adding methods solely for testing purposes.
 
 ### Integration Tests (Karate)
 
 - **Framework**: Karate DSL 1.5.2 (`io.karatelabs:karate-junit5`), run via `ITKarateRunner` with `@SpringBootTest(webEnvironment = RANDOM_PORT)`.
-- **Feature files**: Located alongside the Java source in `src/test/java/.../fetcher/*.feature`. Each file covers one DGS data fetcher.
+- **Feature files**: Located alongside the Java source in `src/test/java/.../fetcher/*.feature` (domain data fetchers) and `src/test/java/.../controller/*.feature` (REST controllers). Each file covers one DGS data fetcher or REST controller.
 - **Authentication**: Every scenario must set the `Authorization` header explicitly:
   ```gherkin
   Given header Authorization = authHeader('admin')
@@ -150,12 +152,131 @@ A local-dev fallback is defined in `application.yml` via `${API_CREDENTIALS_JSON
 - **karate-config.js**: Defines `baseUrl`, `basePath`, and the `authHeader(role)` helper. Uses `JSON.parse()` (not `karate.fromJson`) and `new java.lang.String(combined).getBytes(UTF_8)` for Base64 encoding.
 - **Command**: `./gradlew karateTest`
 
+#### `ITKarateRunner.java`
+
+**Location**: `src/test/java/com/demo/portfolio/api/ITKarateRunner.java`
+
+The JUnit 5 bridge that starts the Spring Boot application context and then hands execution to the Karate parallel runner. Key peculiarities:
+
+- Annotated with `@SpringBootTest(webEnvironment = RANDOM_PORT)` — the server binds to an OS-assigned ephemeral port on every test run.
+- Injects `@LocalServerPort` and passes the actual port to Karate via the system property `demo.server.port`, which `karate-config.js` reads to build `baseUrl`.
+- Uses `Runner.path("classpath:")` so Karate discovers **all** `*.feature` files under the test classpath automatically — no manual file registration needed.
+- Parallel degree is set to `5`; adding new feature files does not require any runner change.
+- The single `@Test` method asserts `results.getFailCount() == 0`, so any Karate scenario failure fails the JUnit test immediately with a descriptive error message.
+
+#### `karate-config.js`
+
+**Location**: `src/test/java/karate-config.js` (placed directly under the test source root so Karate finds it on the classpath)
+
+Global configuration function executed once before any feature file. Key peculiarities:
+
+- **Port resolution**: reads the `demo.server.port` system property set by `ITKarateRunner`; falls back to `8080` for local manual runs.
+- **Credential loading**: reads `API_CREDENTIALS_JSON` from the OS environment (throws if absent), Base64-decodes it using `java.util.Base64.getDecoder()`, and parses the resulting JSON with `JSON.parse()`. **Do not** use `karate.fromJson` here — it does not handle nested Java byte-array output correctly.
+- **`authHeader(role)` helper**: closes over the parsed credential map; builds a `Basic <base64>` string for the role key (`admin`, `writer`, `reader`). The Base64 encoding uses `new java.lang.String(combined).getBytes(java.nio.charset.StandardCharsets.UTF_8)` to stay in Java-interop land, avoiding character-encoding edge cases.
+- **`basePath`**: set to `/model` (the DGS GraphQL endpoint path). All feature files that exercise GraphQL operations reference this via `* path basePath`.
+- Timeouts: `connectTimeout` and `readTimeout` are set to `5000 ms`. Adjust if running against a slow remote instance.
+- Pretty-print flags (`logPrettyRequest`, `logPrettyResponse`) are enabled to aid debugging; disable in CI if log verbosity is a concern.
+
+#### Feature Files
+
+**Locations**:
+- `src/test/java/com/demo/portfolio/api/fetcher/customerDataFetcher.feature` — Customer CRUD operations and access-control enforcement.
+- `src/test/java/com/demo/portfolio/api/fetcher/orderDataFetcher.feature` — Order CRUD operations and access-control enforcement.
+- `src/test/java/com/demo/portfolio/api/controller/graphiqlProxyController.feature` — End-to-end proxy tests (see below).
+
+General conventions for all feature files:
+
+- **GraphQL payloads** are stored as companion `*.graphql` files co-located with the feature file and loaded with `read('FileName.graphql')`. For feature files in sub-packages other than `fetcher/`, use the `classpath:` prefix: `read('classpath:com/demo/portfolio/api/fetcher/GetCustomers.graphql')`.
+- The `Background:` block sets `* url baseUrl` and (for GraphQL features) `* path basePath` so all scenarios share the same base.
+- Structural Karate matchers (`#string`, `#number`, `#notnull`, `#notpresent`) are preferred over literal values to keep assertions stable when seed data changes.
+- Naming convention: `camelCase` matching the class/controller under test (e.g. `customerDataFetcher.feature`, `graphiqlProxyController.feature`).
+
+#### `graphiqlProxyController.feature` (Proxy End-to-End Tests)
+
+**Location**: `src/test/java/com/demo/portfolio/api/controller/graphiqlProxyController.feature`
+
+Validates the full `/proxy/graphiql` → GraphQL round-trip without embedding credentials in any URL.
+
+#### Proxy Controller Bigger Picture (`GraphiQLProxyController`)
+
+**Location**: `src/main/java/com/demo/portfolio/api/controller/GraphiQLProxyController.java`
+
+This controller is a server-side bootstrap endpoint for GraphiQL sessions with role-specific credentials.
+It exists to improve DX in demos/tests while keeping credential handling centralized on the backend.
+
+**Endpoint contract**:
+- `GET /proxy/graphiql?role=<admin|writer|reader>`
+- Returns `text/html` (GraphiQL page) with an injected `<script>` that patches `window.fetch`.
+- The patch adds `Authorization: Basic <base64(user:pass)>` only when the outgoing URL targets the GraphQL path (`dgs.graphql.path`, default `/model`).
+
+**End-to-end request lifecycle**:
+1. Browser calls `/proxy/graphiql?role=...`.
+2. Controller loads credential set from `SecurityProperties` (decoded `API_CREDENTIALS_JSON`) and validates the role.
+3. Controller computes Basic token from the selected credential profile.
+4. Controller fetches the public GraphiQL HTML (`/graphiql`) server-side via `WebClient`.
+5. Controller injects a script before `</head>` (or appends at end if missing).
+6. Browser renders modified GraphiQL; subsequent GraphQL requests automatically include `Authorization` header.
+7. GraphQL endpoint (`/model`) still enforces method-level authorization (`@PreAuthorize` + `Permission`).
+
+**Security model clarifications**:
+- The proxy does **not** bypass Spring Security or method-level checks.
+- Proxy role choice only determines which credential profile is injected.
+- Forbidden operations still return GraphQL errors (`message = 'Forbidden'`) with HTTP 200, as expected by DGS/Karate assertions.
+- Unknown role returns HTTP 400 from the proxy itself.
+- Upstream GraphiQL fetch failures are mapped to HTTP 502 (Bad Gateway).
+
+**Operational notes for agents**:
+- Any change to `dgs.graphql.path` must remain aligned with proxy script matching logic.
+- If proxy tests start returning 502, investigate first whether server-side fetch to `/graphiql` is resolving the correct host/port in the active runtime.
+- Keep proxy logic isolated from GraphQL business code; do not move auth logic into schema resolvers.
+
+**Flow per scenario**:
+1. `GET /proxy/graphiql?role=<role>` — server fetches the public `/graphiql` HTML, injects a `<script>` that contains the `Authorization` header value, and returns the modified HTML.
+2. A JavaScript helper (`extractAuth`) extracts `'Authorization': 'Basic ...'` from the HTML using a regex.
+3. The extracted header is used for a `POST /model` GraphQL call — exactly as the browser-side GraphiQL UI would behave.
+
+**Scenarios**:
+- `admin` queries the customer list (4 success + 2 forbidden scenarios total — see file).
+- `reader` queries a single customer.
+- `reader` queries orders filtered by status.
+- `writer` creates an order.
+- `reader` credentials via proxy **cannot** create a customer → `Forbidden`.
+- `writer` credentials via proxy **cannot** delete a customer → `Forbidden`.
+- Unknown role → HTTP 400.
+
+**Why this is different from other feature files**: the proxy feature does **two** HTTP calls per scenario (GET then POST). The `url` remains pinned to `baseUrl`; only the `path` is changed between calls. No `path basePath` is set in the `Background` — each scenario sets its paths explicitly.
+
 ### Full Suite
 
 ```bash
 ./gradlew verifyAllTests   # runs test + karateTest, fails if either has failures
 ./gradlew check            # same + generates merged HTML report
 ```
+
+### Running `karateTest` and `test` Tasks (Env Requirements)
+
+Both tasks rely on credentials being available at runtime.
+
+- `./gradlew karateTest`
+  - Runs Karate integration tests (`ITKarateRunner` + all `*.feature`).
+  - Requires `API_CREDENTIALS_JSON` (Base64-encoded JSON) to be set in the shell environment.
+  - If missing/invalid, `karate-config.js` fails early by design.
+
+- `./gradlew test`
+  - In this project, `test` depends on `karateTest`, then runs unit tests.
+  - Therefore it has the **same** `API_CREDENTIALS_JSON` requirement as `karateTest`.
+
+**Local execution pattern**:
+
+```bash
+export API_CREDENTIALS_JSON='<base64-json>'
+./gradlew karateTest
+./gradlew test
+```
+
+**VS Code task note**:
+- The workspace includes a helper task (`Test with Credentials`) that writes credentials into `.vscode/test_env.txt`.
+- Agents/users must still ensure `API_CREDENTIALS_JSON` is exported into the process environment used by Gradle.
 
 ## Deliverables
 
@@ -183,3 +304,9 @@ The project should demonstrate **clean architecture**, **cloud-ready design**, a
 - **Reactive Error Logging Rule**:
   - Prefer centralized error mapping/logging in `GlobalDataFetcherExceptionHandler` and interceptors.
   - Service/data-loader boundaries may add contextual `doOnError` logs (warn for expected not-found paths, error for unexpected failures), but avoid repetitive per-step logging in fetchers.
+- **Testing**:
+  - Every time an agent calls a sub-agent he must specify to them that they're sub-agents and that they can skip running the full suite on every change, but the root agent must ensure that the final state of the codebase always passes all tests before any commit.
+  - Every time a root agent finish implementing new changes, they must run the tests related to the affected classes.
+  - If test fails because port 8080 is in use and the test requires it, the root agent can use `lsof -i :8080` to find the process and `kill <pid>` to free the port, then re-run tests.
+  - If any of the executed tests fails, the root agent must investigate and fix the issue before proceeding. Then validates again and repets until the previous tests pass successfully. Only then the root agent can commit the changes.
+  - sub-agents could skip running the related tests on every change, but the root agent must ensure that the final state of the codebase always passes all the related tests before any commit.
