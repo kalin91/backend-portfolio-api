@@ -2,6 +2,7 @@ package com.demo.portfolio.api.config;
 
 import com.demo.portfolio.api.dto.CredentialDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -14,7 +15,11 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,12 +57,17 @@ public class SecurityConfig {
     /**
      * Configures the reactive HTTP security filter chain.
      *
+     * <p>CORS is enabled and delegates to the {@link #corsConfigurationSource(List)} bean.
+     *
      * @param http the {@link ServerHttpSecurity} builder provided by Spring Security
      * @return a fully built {@link SecurityWebFilterChain}
      */
     @Bean
     public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
         return http
+            // Enable CORS so cross-origin demo pages (portfolio site, GraphiQL wrapper)
+            // can reach the API. Delegates to the CorsConfigurationSource bean below.
+            .cors(Customizer.withDefaults())
             // CSRF protection is intentionally disabled: the API is fully stateless and
             // uses HTTP Basic Auth (no session cookies are issued), so CSRF attacks
             // cannot be mounted against it.
@@ -76,6 +86,33 @@ public class SecurityConfig {
                 .pathMatchers("/graphiql/**").permitAll()
                 .anyExchange().authenticated())
             .build();
+    }
+
+    /**
+     * Provides the CORS configuration source for the security filter chain.
+     *
+     * <p>Allowed origins are read from the {@code security.cors.allowed-origins} property,
+     * which defaults to an empty list (CORS effectively disabled) unless explicitly set.
+     * The allowed methods and headers are configured to support the GraphQL endpoint
+     * ({@code POST} with {@code Content-Type} and {@code Authorization} headers).
+     *
+     * @param allowedOrigins the list of allowed origins injected from configuration
+     * @return a {@link CorsConfigurationSource} applied to all paths
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${security.cors.allowed-origins:}") List<String> allowedOrigins) {
+
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(allowedOrigins);
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "OPTIONS"));
+        config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 
     /**
