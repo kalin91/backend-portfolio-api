@@ -36,6 +36,7 @@ Reactive types (`Mono` and `Flux`) are used consistently in the API layer, with 
 - **Interceptors Pipeline**: Request sanitization before execution plus response-time enhancement of enum validation errors.
 - **Observability**: SLF4J-based application logging and Actuator health endpoints.
 - **Tools**: H2 Console accessible at `http://localhost:8082`.
+- **Cloud-Ready Deployment**: Configured with `server.forward-headers-strategy: framework` to handle SSL termination and forwarded headers seamlessly behind reverse proxies (e.g., Google Cloud Run).
 
 ## Security
 

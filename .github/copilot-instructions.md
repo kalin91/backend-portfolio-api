@@ -34,7 +34,7 @@ The application must follow a strict layered architecture:
 - **No Entities in API**: NEVER expose JPA Entities directly in the GraphQL schema. Always use DTOs.
 - **Mapping**: Use MapStruct or explicit manual mappers to convert between Entities and DTOs.
 - **Clean Code**: Follow SOLID principles.
-- **Cloud-Ready**: Design for statelessness and containerization.
+- **Cloud-Ready**: Design for statelessness and containerization. Configured with `server.forward-headers-strategy: framework` in configuration to handle SSL termination and forwarded headers seamlessly behind reverse proxies (like Google Cloud Run).
 
 ## Security Model
 
